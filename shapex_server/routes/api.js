@@ -7,6 +7,7 @@ var path = require('path');
 var fs = require('fs');
 var formidable = require('formidable')
 var taskmanager = require('../models/taskmanager');
+var indexmanager = require('../models/taskmanager');
 var modelmanager = require('../models/modelmanager');
 var request = require('request');
 
@@ -32,6 +33,16 @@ for worker get task
 router.get('/tasks', function(req, res, next) {
 	console.log("tasks get request:");
 	var task = taskmanager.Pop();
+	console.log(util.inspect(task));
+	res.status(200).json(task);
+});
+
+/*
+for index worker get task
+*/
+router.get('/indextasks', function(req, res, nex){
+	console.log("indextasks get request:");
+	var task = indexmanager.Pop();
 	console.log(util.inspect(task));
 	res.status(200).json(task);
 });
@@ -88,6 +99,47 @@ router.post('/upload', function(req, res, next) {
 		}
     });
 });
+
+/*
+for front-end index a file
+*/
+router.post('/index', function(req, res, next) {
+	console.log('index post request:');
+	var form = new formidable.IncomingForm();
+    form.uploadDir = "./upload";  
+    form.keepExtensions = true;
+    form.multiples = false; // we are not ready on multiple support
+    form.parse(req, function(err, fields, files) {
+    	var uploadFile = files.file;
+		if (uploadFile === undefined){
+			console.log('upload failed.');
+			res.send(err);
+			return;
+		} else {
+			if (uploadFile.name === undefined) {
+				console.log("upload failed.");
+				res.send(err);
+				return;
+			}
+		
+			console.log("upload success: "+uploadFile.path); 
+			
+			// create a task with a uniuqe id.
+			var id = uuid.v4();
+			var task = { _id: id, sourcename: uploadFile.name, sourcepath: uploadFile.path };
+			indexmanager.Push(task);
+			console.log('create a index task for '+ id);
+			
+			// add the model to model manager
+			var model = {'status' : 'unavailable', 'downloadurl':''}
+			modelmanager.models[id] = model;
+			console.log('append ' + id + ' to modelmanager: ' + model);
+			
+			res.status(200).json(id);
+		}
+    });
+});
+
 
 /*
 for worker post status

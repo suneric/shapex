@@ -194,7 +194,7 @@ $(document).ready(function(){
 			processData: false,
 			contentType: false,
 			success: function(res){
-				setTimeout(preview(res), 1000);
+				setTimeout(function(){preview(res);}, 1000);
 			}
 		});
 	}
@@ -214,12 +214,12 @@ $(document).ready(function(){
 				});
 			}
 			else {
-				preview(modelId);
+				setTimeout(function(){preview(modelId);}, 1000);
 			}
 		});
 	}
 });
-
+ 
 </script>
 
 </html>

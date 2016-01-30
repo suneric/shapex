@@ -17,6 +17,7 @@ var build = nconf.get('build');
 var serverConf = nconf.get(build);
 var shapexServer = serverConf.shapex;
 var workFolder = nconf.get('work_folder');
+var indexFolder = nconf.get('index_folder');
 var amr = nconf.get('executable');
 
 var workerServer = serverConf.workerServer;
@@ -37,18 +38,26 @@ function ModelManager() {
 var modelManager = new ModelManager();
 
 // https://nodejs.org/api/all.html#all_settimeout_cb_ms
-setTimeout(function() { pollTaskFromShapeXServer();}, 1); 
+setTimeout(function() { pollTaskFromShapeXServer(false);}, 1); 
 
-var pollTaskFromShapeXServer = function() {
+var pollTaskFromShapeXServer = function(index) {
 	console.log('running pollTaskFromShapeXServer');
 	if(isTaskRunning){
-		setTimeout(pollTaskFromShapeXServer, pollInterval);
+		setTimeout(function(){pollTaskFromShapeXServer(index);}, pollInterval);
 		console.log('task running, polling every'+pollInterval+'ms');
 		return;
 	}
 
-	var pollurl = shapexServer + '/api/1.0/tasks';
-	console.log("trying to get an active task from shapexServer: " + pollurl);
+	index = !index;
+	var pollurl = shapexServer;
+	if (index === true) {
+		pollurl += '/api/1.0/indextasks';
+		console.log("trying to get an active indextask from shapexServer: " + pollurl);
+	}
+	else {
+		pollurl += '/api/1.0/tasks';
+		console.log("trying to get an active task from shapexServer: " + pollurl);
+	}
 	
 	request(pollurl, function (error, response, body) {
 	 	if (!error && response.statusCode == 200) {
@@ -67,7 +76,13 @@ var pollTaskFromShapeXServer = function() {
 				var modelPath = tasks[0].sourcepath;
 				
 				// make model id folder and download model
-				var modelFolder = path.join(workFolder, modelId);
+				var modelFolder;
+				if (index === true) {
+					modelFolder = path.join(indexFolder, modelId);
+				} else {
+					modelFolder = path.join(workFolder, modelId); 
+				}
+					
 				if(!fs.existsSync(modelFolder)) {
 					fs.mkdirSync(modelFolder);
 				}
@@ -110,7 +125,12 @@ var pollTaskFromShapeXServer = function() {
 			            modelManager[modelId] = { 'descriptor' : descriptor, 'thumbnail' : thumbnail, 'properties' : props, 'view' : view };
 			        }
 					
-					var postStatus = shapexServer + '/api/1.0/worker_status?id='+ modelId + '&status=' + status + '&downloadurl=' + downloadurl;
+					var postStatus = shapexServer;
+					if (index === true) {
+						postStatus += '/api/1.0/worker_status?id='+ modelId + '&indexstatus=' + status + '&downloadurl=' + downloadurl;
+					} else {
+						postStatus += '/api/1.0/worker_status?id='+ modelId + '&status=' + status + '&downloadurl=' + downloadurl;
+					}
 			        console.log('post result to shapex server: ' + postStatus);
 			        request.post(postStatus, function (res) {
 			            console.log(util.inspect(res));
@@ -124,7 +144,7 @@ var pollTaskFromShapeXServer = function() {
 	 	    console.log('try to get an active task from webserver failed, error info:' + error);
 	 	}
 	});
-	setTimeout(pollTaskFromShapeXServer, pollInterval);
+	setTimeout(function(){pollTaskFromShapeXServer(index);}, pollInterval);
 }
 
 /*
