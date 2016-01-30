@@ -1,0 +1,15 @@
+{
+  "name": "shapex_worker",
+  "version": "1.0.0",
+  "description": "",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Eric Sun",
+  "license": "ISC",
+  "dependencies": {
+    "nconf": "^0.8.2",
+    "request": "^2.67.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+	"build" : "development",
+	"executable" : "C:/AProject/AMR/product/source/lib/Release_x64/amr.exe",
+	"work_folder" : "C:/AProject/AMR/data/worker",
+	"interval" : 5000,
+	"development" : {
+    "shapex": "http://localhost:8080",
+    "workerServer": "http://127.0.0.1:1337/"
+	}
+}

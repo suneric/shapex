@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>SHAPEX Search Results</title>
+<link rel="stylesheet" type="text/css" href="../stylesheets/main.css">
+<style type="text/css">
+
+ul {
+	list-style:none;
+	line-height:40px;
+}
+
+li {
+	display:block;
+	float:left;
+	padding:15px;
+	line-height:50px;
+}
+
+body {
+	text-align : center
+	vertical-align: center;
+}
+
+#container {
+	margin-left: auto;
+	margin-right: auto;
+	vertical-align: center;
+	text-align: center;
+}
+
+#search {
+	height: 100px;
+	width: 1200px;
+	margin-left: 20px;
+	margin-top: 20px;
+	vertical-align: center;
+	text-align: center;
+}
+
+#results {
+	margin-left: auto;
+	margin-right: auto;
+	margin-top: 10px;
+	vertical-align: center;
+	text-align: center;
+}
+
+#text-search {
+	width: 600px;
+	height: 40px;
+	display: block;
+	float: left;
+	background-color: white;
+	font-family: Verdana, Arial;
+	font-size: 30px;
+}
+
+#btn-search {
+	margin-left: 10px;
+	width: 100px;
+	height: 45px;
+	float: left;
+	display: block;
+	font-family: Verdana, Arial;
+	font-size: 30px;
+}
+
+#btn-upload {
+	margin-left: 10px;
+	width: 205px;
+	height: 45px;
+	float: left;
+	display: block;
+	font-family: Verdana, Arial;
+	font-size: 35px;
+}
+
+.item {
+	margin-left: 20px;
+	margin-top: 10px;
+	float: left;
+	height: 300px;
+	width: 300px;
+	background-color: yellow;
+}
+
+</style>
+<script src="../javascripts/jquery.min.js"></script>
+</head>
+
+<body>
+<div id ="container">
+<div id="search">
+<form method="get" onsubmit="search()">
+	<input id="text-search" type="text"></input>
+	<input id="btn-search" class="button" type="submit" value="Go"></input>
+<form>	
+<input id="btn-upload" type="file" class="button" style="display:no" value="Upload"></input>
+</div>
+<div id="upload">
+</div>
+<div id="results">
+</div>
+</div>
+</body>
+
+<script type="text/javascript">
+
+function appendItem(data) {
+	var itemDiv = document.createElement("div");
+	itemDiv.setAttribute('class','item');
+	
+	var name = data.url;
+	var startIndex = name.lastIndexOf('\\');
+	name = name.substr(startIndex+1, name.length-startIndex);
+	var content = "Name: "+name + "</br>";
+	content += "Format: " + data.format + "</br>";
+	for (var i = 0; i < data.properties.length; ++i)
+	{
+		var prop = JSON.stringify(data.properties[i]);		
+		content += prop + "</br>";
+	}
+	itemDiv.innerHTML = content;
+    //var img = document.createElement("img");
+	//img.src = data.url;
+	//itemDiv.appendChild(img);
+	$("#results").append(itemDiv);
+};
+
+function appendPreview(data) {
+	var img = $('#upload').find('img')[0]; 
+	if (img === undefined){
+		img = document.createElement("img");
+		img.height = 200;
+		img.width = 200;
+		$('#upload').append(img);
+	}
+	
+	img.src = data;
+};
+
+function search() {
+	var searchKey = $('#text-search').val();
+	if (searchKey === undefined)
+		return;
+	
+	// has to call?
+	var url = "/api/1.0/";
+	$.get(url, function(data) {
+		location.href = '/results.html?search='+searchKey;
+	});
+};
+
+function results()
+{
+	var url = "/api/1.0/search/"+$('#text-search').val();
+	$.get(url, function(data){
+		if (data.length === 0) {
+			return;
+		}
+		
+		for (var i = 0; i < data.length; ++i) {
+			var res = data[i];
+			appendItem(res);
+		}
+	});
+};
+
+$(document).ready(function(){
+	var url = window.location.toString();
+	var index = url.lastIndexOf("search");
+	if (index > 0) {	
+		var key = url.substr(url.lastIndexOf("search")+7,url.length-url.lastIndexOf("search="));
+		$("#text-search").val(key);
+		results();
+	}
+	
+	$('#btn-upload').change(function() {
+    // only support single file
+		var file = $(this)[0].files[0];
+		uploadfile(file);
+		return false;
+	});
+	
+	function uploadfile(f) {
+		document.body.style.cursor = "progress";
+		var fd = new FormData();
+		fd.append("file", f);
+		$.ajax({
+			url: "/api/1.0/upload",
+			type: "POST",
+			data: fd,
+			processData: false,
+			contentType: false,
+			success: function(res){
+				setTimeout(preview(res), 1000);
+			}
+		});
+	}
+	
+	function preview(modelId) {
+		document.body.style.cursor = "progress";
+		$.get('api/1.0/worker_status/'+modelId, function(status){
+			if (status === 'fail') {
+				alert('failed to create signature for the uploaded file.');
+			}
+			else if (status === 'succeed'){
+				var previewurl = '/api/1.0/preview/'+modelId;
+				$.get(previewurl, function(data){
+					if (data.url) {
+						appendPreview(data.url);
+					}
+				});
+			}
+			else {
+				preview(modelId);
+			}
+		});
+	}
+});
+
+</script>
+
+</html>
