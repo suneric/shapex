@@ -1,0 +1,16 @@
+{
+  "name": "shapex_indexer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Eric Sun",
+  "license": "ISC",
+  "dependencies": {
+    "findit": "^2.0.0",
+    "form-data": "^1.0.0-rc3",
+    "request": "^2.69.0"
+  }
+}

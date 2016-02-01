@@ -13,11 +13,14 @@ var spawnSync = require('child_process').spawnSync;
 
 nconf.argv().env().file({file: __dirname + '/config.json'});
 
+var currentDir = __dirname;
+
 var build = nconf.get('build');
 var serverConf = nconf.get(build);
 var shapexServer = serverConf.shapex;
-var workFolder = nconf.get('work_folder');
-var indexFolder = nconf.get('index_folder');
+var workFolder = path.join(currentDir, nconf.get('work_folder'));
+var indexFolder = path.join(currentDir, nconf.get('index_folder'));
+var serverType = nconf.get('server_type');
 var amr = nconf.get('executable');
 
 var workerServer = serverConf.workerServer;
@@ -37,20 +40,23 @@ function ModelManager() {
 }
 var modelManager = new ModelManager();
 
-// https://nodejs.org/api/all.html#all_settimeout_cb_ms
-setTimeout(function() { pollTaskFromShapeXServer(false);}, 1); 
+function FileFormat(ext) {
+	return ext.substr(1, ext.length);
+}
 
-var pollTaskFromShapeXServer = function(index) {
+// https://nodejs.org/api/all.html#all_settimeout_cb_ms
+setTimeout(function() { pollTaskFromShapeXServer(serverType);}, 1); 
+
+var pollTaskFromShapeXServer = function(serverType) {
 	console.log('running pollTaskFromShapeXServer');
 	if(isTaskRunning){
-		setTimeout(function(){pollTaskFromShapeXServer(index);}, pollInterval);
+		setTimeout(function(){pollTaskFromShapeXServer(serverType);}, pollInterval);
 		console.log('task running, polling every'+pollInterval+'ms');
 		return;
 	}
 
-	index = !index;
 	var pollurl = shapexServer;
-	if (index === true) {
+	if (serverType === 'index') {
 		pollurl += '/api/1.0/indextasks';
 		console.log("trying to get an active indextask from shapexServer: " + pollurl);
 	}
@@ -77,7 +83,7 @@ var pollTaskFromShapeXServer = function(index) {
 				
 				// make model id folder and download model
 				var modelFolder;
-				if (index === true) {
+				if (serverType === 'index') {
 					modelFolder = path.join(indexFolder, modelId);
 				} else {
 					modelFolder = path.join(workFolder, modelId); 
@@ -126,10 +132,10 @@ var pollTaskFromShapeXServer = function(index) {
 			        }
 					
 					var postStatus = shapexServer;
-					if (index === true) {
-						postStatus += '/api/1.0/worker_status?id='+ modelId + '&indexstatus=' + status + '&downloadurl=' + downloadurl;
+					if (serverType === 'index') {
+						postStatus += '/api/1.0/worker_status?id='+modelId+'&indexstatus='+status+'&downloadurl='+downloadurl+'&name='+filename+'&format='+FileFormat(path.extname(filePath));
 					} else {
-						postStatus += '/api/1.0/worker_status?id='+ modelId + '&status=' + status + '&downloadurl=' + downloadurl;
+						postStatus += '/api/1.0/worker_status?id='+modelId+'&status='+status+'&downloadurl='+downloadurl;
 					}
 			        console.log('post result to shapex server: ' + postStatus);
 			        request.post(postStatus, function (res) {
@@ -144,7 +150,7 @@ var pollTaskFromShapeXServer = function(index) {
 	 	    console.log('try to get an active task from webserver failed, error info:' + error);
 	 	}
 	});
-	setTimeout(function(){pollTaskFromShapeXServer(index);}, pollInterval);
+	setTimeout(function(){pollTaskFromShapeXServer(serverType);}, pollInterval);
 }
 
 /*
