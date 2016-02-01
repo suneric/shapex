@@ -107,25 +107,20 @@ body {
 
 <script type="text/javascript">
 
-function appendItem(data) {
-	var itemDiv = document.createElement("div");
-	itemDiv.setAttribute('class','item');
-	
-	var name = data.url;
-	var startIndex = name.lastIndexOf('\\');
-	name = name.substr(startIndex+1, name.length-startIndex);
-	var content = "Name: "+name + "</br>";
-	content += "Format: " + data.format + "</br>";
-	for (var i = 0; i < data.properties.length; ++i)
-	{
-		var prop = JSON.stringify(data.properties[i]);		
-		content += prop + "</br>";
-	}
-	itemDiv.innerHTML = content;
-    //var img = document.createElement("img");
-	//img.src = data.url;
-	//itemDiv.appendChild(img);
-	$("#results").append(itemDiv);
+function appendItem(item, index) {
+	var modelId = item._id;
+	var url = item.url;
+	var previewurl = '/api/1.0/preview?id='+modelId+'&downloadurl='+url;
+	$.get(previewurl, function(res){
+		var itemDiv = document.createElement("div");
+		itemDiv.setAttribute('class','item');
+		var img = document.createElement("img");
+		img.height = 300;
+		img.width = 300;
+		img.src = res.url;
+		itemDiv.appendChild(img);
+		$("#results").append(itemDiv);
+	});
 };
 
 function appendPreview(data) {
@@ -162,7 +157,7 @@ function results()
 		
 		for (var i = 0; i < data.length; ++i) {
 			var res = data[i];
-			appendItem(res);
+			appendItem(res, i);
 		}
 	});
 };
@@ -201,19 +196,17 @@ $(document).ready(function(){
 	
 	function preview(modelId) {
 		document.body.style.cursor = "progress";
-		$.get('api/1.0/worker_status/'+modelId, function(status){
-			if (status === 'fail') {
+		$.get('api/1.0/worker_status/'+modelId, function(res){
+			if (res.status === 'fail') {
 				alert('failed to create signature for the uploaded file.');
-			}
-			else if (status === 'succeed'){
-				var previewurl = '/api/1.0/preview/'+modelId;
+			} else if (res.status === 'succeed'){	
+				var previewurl = '/api/1.0/preview?id='+modelId+'&downloadurl='+status.downloadurl;
 				$.get(previewurl, function(data){
 					if (data.url) {
 						appendPreview(data.url);
 					}
 				});
-			}
-			else {
+			} else {
 				setTimeout(function(){preview(modelId);}, 1000);
 			}
 		});

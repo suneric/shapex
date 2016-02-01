@@ -21,8 +21,10 @@ router.get('/search/:key', function(req, res, next) {
 	var key = req.params.key;
 	console.log("result of search: "+key);
 	Item.search(key, function(items) {
+		console.log('search return: ' + items);
         res.status(200).json(items);
     }, function(err) {
+		console.log('err search.');
         res.status(400).json(err);
     });
 });
@@ -111,6 +113,7 @@ router.post('/index', function(req, res, next) {
     form.multiples = false; // we are not ready on multiple support
     form.parse(req, function(err, fields, files) {
     	var uploadFile = files.file;
+		console.log(util.inspect(fields) + util.inspect(files));
 		if (uploadFile === undefined){
 			console.log('upload failed.');
 			res.send(err);
@@ -129,12 +132,6 @@ router.post('/index', function(req, res, next) {
 			var task = { _id: id, sourcename: uploadFile.name, sourcepath: uploadFile.path };
 			indexmanager.Push(task);
 			console.log('create a index task for '+ id);
-			
-			// add the model to model manager
-			var model = {'status' : 'unavailable', 'downloadurl':''}
-			modelmanager.models[id] = model;
-			console.log('append ' + id + ' to modelmanager: ' + model);
-			
 			res.status(200).json(id);
 		}
     });
@@ -147,20 +144,35 @@ for worker post status
 router.post('/worker_status', function(req, res, next) {
 	console.log('worker_status post request:');
 	var queryParams = url.parse(req.url, true).query;
-	var modelId = queryParams.id;
-	var workstatus = queryParams.status;
-	var downloadurl = queryParams.downloadurl;
 	console.log(util.inspect(queryParams));
 	
-	if( modelmanager.models[modelId]){
-		modelmanager.models[modelId].status = workstatus;
-		modelmanager.models[modelId].downloadurl = downloadurl;
-		console.log('update '+ modelId + ' status is done.');
-		res.status(200).send(modelmanager.models[modelId]);
-	}
-	else{
-		console.log('update '+ modelId + ' is failed.');
-		res.status(404).send('model is not found');
+	var modelId = queryParams.id;
+	if (queryParams.indexstatus != undefined) {
+		// for index
+		console.log('index status of '+modelId+ ' is '+ queryParams.indexstatus);
+		
+		// save the information to mongodb
+		var options = {
+			_id : modelId,
+			name :  queryParams.name,
+			format : queryParams.format,
+			url : queryParams.downloadurl
+		};
+		Item.index(options, function(items){
+			console.log(items + ' is indexed');
+		});
+	} else {
+		// update work status
+		console.log('work status of '+modelId+ ' is '+ queryParams.status);
+		if( modelmanager.models[modelId]){
+			modelmanager.models[modelId].status = queryParams.status;
+			modelmanager.models[modelId].downloadurl = queryParams.downloadurl;
+			console.log('update '+ modelId + ' status is done.');
+			res.status(200).send(modelmanager.models[modelId]);
+		} else{
+			console.log('update '+ modelId + ' is failed.');
+			res.status(404).send('model is not found');
+		}	
 	}
 });
 
@@ -175,54 +187,53 @@ router.get('/worker_status/:id', function (req, res, next) {
 		var downloadurl = modelmanager.models[modelId].downloadurl;
 		if (workstatus === 'succeed' && downloadurl !== '') {
 			console.log(modelId+ ' is succeed.');
-			res.status(200).send('succeed');
+			res.status(200).send({'status' : 'succeed', 'downloadurl' : downloadurl});
 		}
 		else 
 		{
 			if (workstatus === 'fail'){
 				console.log(modelId+ ' is failed.');
-				res.status(200).send('fail');
+				res.status(200).send({'status' : 'fail', 'downloadurl' : ''});
 			} else {
 				console.log(modelId+ ' is inprogress.');
-				res.status(200).send('inprogress');
+				res.status(200).send({'status' : 'inprogress', 'downloadurl' : ''});
 			}
 		}
 	}
 	else{
 		console.log(modelId+ ' is unavailable.');
-		res.status(200).send('unavailable');
+		res.status(200).send({'status' : 'unavailable', 'downloadurl' : ''});
 	}
 });
 
-router.get('/preview/:id', function(req, res, next) {
+router.get('/preview', function(req, res, next) {
 	console.log('preview get request:');
-	console.log(req.params);
-	var modelId = req.params.id;
+	var parsedUrl = url.parse(req.url, true); 
+	console.log(parsedUrl);
+	var modelId = parsedUrl.query.id;
 	console.log('preview for id: '+modelId);
-	if (modelmanager.models[modelId]) {
-		var previewFolder = './public/images';
-		var previewdir = path.join(previewFolder, modelId+'.png');
-		var thumbnailurl = modelmanager.models[modelId].downloadurl;
-		thumbnailurl+='?thumbnail='+modelId;
-		console.log('download thumbnail from '+ thumbnailurl);
+
+	var previewFolder = './public/images';
+	var previewdir = path.join(previewFolder, modelId+'.png');
+	var thumbnailurl = parsedUrl.query.downloadurl;
+	thumbnailurl+='?thumbnail='+modelId;
+	console.log('download thumbnail from '+ thumbnailurl);
 		
-		// download load thumbnail from worker
-		var downloadThumbnail = fs.createWriteStream(previewdir);
-		request.get(thumbnailurl).pipe(downloadThumbnail);
-		downloadThumbnail.on('finish', function () {
-			if (fs.existsSync(previewdir)) {
-				console.log('downloaded thumbnail to '+previewdir);
-				var thumbnailpath = '/images/'+modelId+'.png';
-				res.status(200).send({'url': thumbnailpath});
-			}
-			else {
-				res.status(304).send('fail to preview.');
-			}
-		});
-	}
-	else {
-		res.status(404).send('preview not found.');
-	}
+	// download load thumbnail from worker
+	var downloadThumbnail = fs.createWriteStream(previewdir);
+	request.get(thumbnailurl).pipe(downloadThumbnail);
+	downloadThumbnail.on('finish', function () {
+		if (fs.existsSync(previewdir)) {
+			console.log('downloaded thumbnail to '+previewdir);
+			var thumbnailpath = '/images/'+modelId+'.png';
+			res.status(200).send({'url': thumbnailpath});
+		}
+		else {
+			console.log('fail to preview.');
+			res.status(304).send('fail to preview.');
+		}
+	});
+	
 });
 
 module.exports = router;

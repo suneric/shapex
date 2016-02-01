@@ -1,7 +1,9 @@
 {
 	"build" : "development",
 	"executable" : "C:/AProject/AMR/product/source/lib/Release_x64/amr.exe",
-	"work_folder" : "C:/AProject/AMR/data/worker",
+	"work_folder" : "./storage/work",
+	"index_folder" : "./storage/index",
+	"server_type" : "work",
 	"interval" : 5000,
 	"development" : {
     "shapex": "http://localhost:8080",
