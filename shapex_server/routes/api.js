@@ -7,7 +7,6 @@ var path = require('path');
 var fs = require('fs');
 var formidable = require('formidable')
 var taskmanager = require('../models/taskmanager');
-var indexmanager = require('../models/taskmanager');
 var modelmanager = require('../models/modelmanager');
 var request = require('request');
 
@@ -35,16 +34,7 @@ for worker get task
 router.get('/tasks', function(req, res, next) {
 	console.log("tasks get request:");
 	var task = taskmanager.Pop();
-	console.log(util.inspect(task));
-	res.status(200).json(task);
-});
-
-/*
-for index worker get task
-*/
-router.get('/indextasks', function(req, res, nex){
-	console.log("indextasks get request:");
-	var task = indexmanager.Pop();
+	//modelmanager.models[task._id].status = 'inprogress';
 	console.log(util.inspect(task));
 	res.status(200).json(task);
 });
@@ -88,12 +78,12 @@ router.post('/upload', function(req, res, next) {
 			
 			// create a task with a uniuqe id.
 			var id = uuid.v4();
-			var task = { _id: id, sourcename: uploadFile.name, sourcepath: uploadFile.path };
+			var task = { _id: id, sourcename: uploadFile.name, sourcepath: uploadFile.path, worktype : 'upload' };
 			taskmanager.Push(task);
 			console.log('create a task for '+ id);
 		
 			// add the model to model manager
-			var model = {'status' : 'unavailable', 'downloadurl':''}
+			var model = {'status' : 'unavailable', 'name': '', 'downloadurl':''}
 			modelmanager.models[id] = model;
 			console.log('append ' + id + ' to modelmanager: ' + model);
 		
@@ -129,14 +119,35 @@ router.post('/index', function(req, res, next) {
 			
 			// create a task with a uniuqe id.
 			var id = uuid.v4();
-			var task = { _id: id, sourcename: uploadFile.name, sourcepath: uploadFile.path };
-			indexmanager.Push(task);
+			var task = { _id: id, sourcename: uploadFile.name, sourcepath: uploadFile.path, worktype : 'index' };
+			taskmanager.Push(task);
 			console.log('create a index task for '+ id);
 			res.status(200).json(id);
 		}
     });
 });
 
+router.post('/index_status', function(req, res, next) {
+	console.log('index_status post request:');
+	var queryParams = url.parse(req.url, true).query;
+	console.log(util.inspect(queryParams));
+	
+	var modelId = queryParams.id;
+	if (queryParams.status != undefined) {
+		console.log('index status of '+modelId+ ' is '+ queryParams.status);
+		// save the information to mongodb
+		var options = {
+			_id : modelId,
+			name :  queryParams.name,
+			format : queryParams.format,
+			url : queryParams.downloadurl
+		};
+		
+		Item.index(options, function(items){
+			console.log(items + ' is indexed');
+		});
+	}
+});
 
 /*
 for worker post status
@@ -147,25 +158,11 @@ router.post('/worker_status', function(req, res, next) {
 	console.log(util.inspect(queryParams));
 	
 	var modelId = queryParams.id;
-	if (queryParams.indexstatus != undefined) {
-		// for index
-		console.log('index status of '+modelId+ ' is '+ queryParams.indexstatus);
-		
-		// save the information to mongodb
-		var options = {
-			_id : modelId,
-			name :  queryParams.name,
-			format : queryParams.format,
-			url : queryParams.downloadurl
-		};
-		Item.index(options, function(items){
-			console.log(items + ' is indexed');
-		});
-	} else {
-		// update work status
+	if (queryParams.status != undefined) {
 		console.log('work status of '+modelId+ ' is '+ queryParams.status);
 		if( modelmanager.models[modelId]){
 			modelmanager.models[modelId].status = queryParams.status;
+			modelmanager.models[modelId].name = queryParams.name;
 			modelmanager.models[modelId].downloadurl = queryParams.downloadurl;
 			console.log('update '+ modelId + ' status is done.');
 			res.status(200).send(modelmanager.models[modelId]);
@@ -184,39 +181,29 @@ router.get('/worker_status/:id', function (req, res, next) {
 	console.log('worker status for id: '+modelId);
 	if (modelmanager.models[modelId]) {
 		var workstatus = modelmanager.models[modelId].status;
+		var name = modelmanager.models[modelId].name;
 		var downloadurl = modelmanager.models[modelId].downloadurl;
-		if (workstatus === 'succeed' && downloadurl !== '') {
-			console.log(modelId+ ' is succeed.');
-			res.status(200).send({'status' : 'succeed', 'downloadurl' : downloadurl});
-		}
-		else 
-		{
-			if (workstatus === 'fail'){
-				console.log(modelId+ ' is failed.');
-				res.status(200).send({'status' : 'fail', 'downloadurl' : ''});
-			} else {
-				console.log(modelId+ ' is inprogress.');
-				res.status(200).send({'status' : 'inprogress', 'downloadurl' : ''});
-			}
-		}
+		console.log(modelId+ ' is '+workstatus);
+		res.status(200).send({'status' : workstatus, 'downloadurl' : downloadurl, 'name' : name});
 	}
 	else{
 		console.log(modelId+ ' is unavailable.');
-		res.status(200).send({'status' : 'unavailable', 'downloadurl' : ''});
+		res.status(200).send({'status' : 'unavailable', 'downloadurl' : '', 'name' : ''});
 	}
 });
 
 router.get('/preview', function(req, res, next) {
 	console.log('preview get request:');
 	var parsedUrl = url.parse(req.url, true); 
-	console.log(parsedUrl);
 	var modelId = parsedUrl.query.id;
+	var type = parsedUrl.query.type;
 	console.log('preview for id: '+modelId);
 
 	var previewFolder = './public/images';
 	var previewdir = path.join(previewFolder, modelId+'.png');
 	var thumbnailurl = parsedUrl.query.downloadurl;
-	thumbnailurl+='?thumbnail='+modelId;
+	var name = parsedUrl.query.name;
+	thumbnailurl+='?thumbnail='+modelId+'&name='+name+'&type='+type;
 	console.log('download thumbnail from '+ thumbnailurl);
 		
 	// download load thumbnail from worker

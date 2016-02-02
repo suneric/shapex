@@ -13,58 +13,51 @@ var spawnSync = require('child_process').spawnSync;
 
 nconf.argv().env().file({file: __dirname + '/config.json'});
 
-var currentDir = __dirname;
+var currentdir = __dirname;
+var workFolder = path.join(currentdir, nconf.get('work_folder'));
+var indexFolder = path.join(currentdir, nconf.get('index_folder'));
 
 var build = nconf.get('build');
 var serverConf = nconf.get(build);
 var shapexServer = serverConf.shapex;
-var workFolder = path.join(currentDir, nconf.get('work_folder'));
-var indexFolder = path.join(currentDir, nconf.get('index_folder'));
-var serverType = nconf.get('server_type');
 var amr = nconf.get('executable');
 
 var workerServer = serverConf.workerServer;
 var workerServerHostName = url.parse(workerServer).hostname;
 var workerServerPort = url.parse(workerServer).port;
+
 console.log('worker http server: ' + workerServerHostName + ' port: ' + workerServerPort);
 
 var isTaskRunning = false;
 var pollInterval = nconf.get('interval');
 
-
 /* 
-ModelManager maintain the model id to signature files
+get file extension
 */
-function ModelManager() {
-	ModelManager.prototype.models = {};
-}
-var modelManager = new ModelManager();
-
 function FileFormat(ext) {
 	return ext.substr(1, ext.length);
 }
 
-// https://nodejs.org/api/all.html#all_settimeout_cb_ms
-setTimeout(function() { pollTaskFromShapeXServer(serverType);}, 1); 
+function ModelFolder(modelId, workType) {
+	if (workType === 'index') {
+		return path.join(indexFolder, modelId);
+	} else {
+		return path.join(workFolder, modelId);
+	}
+}
 
-var pollTaskFromShapeXServer = function(serverType) {
+setTimeout(function() { pollTaskFromShapeXServer();}, 1); 
+
+var pollTaskFromShapeXServer = function() {
 	console.log('running pollTaskFromShapeXServer');
 	if(isTaskRunning){
-		setTimeout(function(){pollTaskFromShapeXServer(serverType);}, pollInterval);
+		setTimeout(function(){pollTaskFromShapeXServer();}, pollInterval);
 		console.log('task running, polling every'+pollInterval+'ms');
 		return;
 	}
 
-	var pollurl = shapexServer;
-	if (serverType === 'index') {
-		pollurl += '/api/1.0/indextasks';
-		console.log("trying to get an active indextask from shapexServer: " + pollurl);
-	}
-	else {
-		pollurl += '/api/1.0/tasks';
-		console.log("trying to get an active task from shapexServer: " + pollurl);
-	}
-	
+	var pollurl = shapexServer + '/api/1.0/tasks';
+	console.log("trying to get an active task from shapexServer: " + pollurl);
 	request(pollurl, function (error, response, body) {
 	 	if (!error && response.statusCode == 200) {
 			isTaskRunning = true;
@@ -80,15 +73,10 @@ var pollTaskFromShapeXServer = function(serverType) {
 				var modelId = tasks[0]._id;
 				var modelName = tasks[0].sourcename;
 				var modelPath = tasks[0].sourcepath;
+				var workType = tasks[0].worktype;
 				
 				// make model id folder and download model
-				var modelFolder;
-				if (serverType === 'index') {
-					modelFolder = path.join(indexFolder, modelId);
-				} else {
-					modelFolder = path.join(workFolder, modelId); 
-				}
-					
+				var modelFolder = ModelFolder(modelId, workType);
 				if(!fs.existsSync(modelFolder)) {
 					fs.mkdirSync(modelFolder);
 				}
@@ -100,9 +88,8 @@ var pollTaskFromShapeXServer = function(serverType) {
 				console.log('download file from' + pollurl);
 				request.get(pollurl).pipe(downloadedModel);
 				downloadedModel.on('finish', function () {
-					console.log('running amr with cwd: ' + modelFolder);
 					var filePath = downloadDir;
-					console.log(amr, filePath);
+					console.log('running amr with cwd: ' + filePath);
 					var generator = spawnSync(amr, [filePath], { cwd: modelFolder, encoding: 'utf8' }, function (err, stdout, stderr){
 						console.log('fail to create signature for '+filePath);
 					});
@@ -128,14 +115,13 @@ var pollTaskFromShapeXServer = function(serverType) {
 					{
 						status = 'succeed';
 						downloadurl = workerServer+ 'signature';
-			            modelManager[modelId] = { 'descriptor' : descriptor, 'thumbnail' : thumbnail, 'properties' : props, 'view' : view };
 			        }
 					
 					var postStatus = shapexServer;
-					if (serverType === 'index') {
-						postStatus += '/api/1.0/worker_status?id='+modelId+'&indexstatus='+status+'&downloadurl='+downloadurl+'&name='+filename+'&format='+FileFormat(path.extname(filePath));
+					if (workType === 'index') {
+						postStatus += '/api/1.0/index_status?id='+modelId+'&status='+status+'&downloadurl='+downloadurl+'&name='+filename+'&format='+FileFormat(path.extname(filePath));
 					} else {
-						postStatus += '/api/1.0/worker_status?id='+modelId+'&status='+status+'&downloadurl='+downloadurl;
+						postStatus += '/api/1.0/worker_status?id='+modelId+'&status='+status+'&downloadurl='+downloadurl+'&name='+filename;
 					}
 			        console.log('post result to shapex server: ' + postStatus);
 			        request.post(postStatus, function (res) {
@@ -150,72 +136,66 @@ var pollTaskFromShapeXServer = function(serverType) {
 	 	    console.log('try to get an active task from webserver failed, error info:' + error);
 	 	}
 	});
-	setTimeout(function(){pollTaskFromShapeXServer(serverType);}, pollInterval);
+	setTimeout(function(){pollTaskFromShapeXServer();}, pollInterval);
 }
 
 /*
-Server for 
+Server for query thumbnail, descriptor, props and view
+workserver + /signature?thumbnail=&name=&downloadurl=&type=
+workserver + /signature?descriptor=&name=&downloadurl=&type=
+workserver + /signature?properties=&name=&downloadurl=&type=
+workserver + /signature?view=&name=&downloadurl=&type=
 */
 http.createServer(function (req, res) {
 	console.log('request url is: ' + req.url);
-	// http://nodejs.cn/api/url.html#url_url_parse_urlstr_parsequerystring_slashesdenotehost
 	var parsedUrl = url.parse(req.url, true); 
 	if (parsedUrl.pathname != '/signature') {
 		res.status(404).send('invalid request');
 		return;
 	}
 	
+	var filename = parsedUrl.query.name;
+	var type = parsedUrl.query.type;
 	if (parsedUrl.query.thumbnail != undefined)
 	{
 		if (req.method === 'GET'){
 			var modelId = parsedUrl.query.thumbnail;
-			console.log('the thumbnail to query is: ' + modelId);
-			if(modelManager[modelId]) {
-				var file = modelManager[modelId].thumbnail;
-				var filename = path.basename(file);
-				console.log('download thumbnail of '+filename);
-				res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-				var fileStream = fs.createReadStream(file);
-				fileStream.pipe(res);
-			}
+			var modelFolder = ModelFolder(modelId, type);
+			var file = modelFolder+'/'+filename+'.png';
+			console.log('download thumbnail '+file);
+			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
+			var fileStream = fs.createReadStream(file);
+			fileStream.pipe(res);
 		}		
 	} else if (parsedUrl.query.descriptor != undefined) {
 		if (req.method === 'GET'){
 			var modelId = parsedUrl.query.descriptor;
-			console.log('the descriptor to query is: ' + modelId);
-			if(modelManager[modelId]) {
-				var file = modelManager[modelId].descriptor;
-				var filename = path.basename(file);
-				console.log('download descriptor of '+filename);
-				res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-				var fileStream = fs.createReadStream(file);
-				fileStream.pipe(res);
-			}
+			var modelFolder = ModelFolder(modelId, type);
+			var file = modelFolder+'/'+filename+'.txt';
+			console.log('download descriptor '+file);
+			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
+			var fileStream = fs.createReadStream(file);
+			fileStream.pipe(res);
 		}
 	} else if (parsedUrl.query.properties != undefined) {
-			if (req.method === 'GET'){
-				var modelId = parsedUrl.query.properties;
-				console.log('the properties to query is: ' + modelId);
-				if(modelManager[modelId]) {
-					var file = modelManager[modelId].properties;
-					var filename = path.basename(file);
-					console.log('download properties of '+filename);
-					res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-					var fileStream = fs.createReadStream(file);
-					fileStream.pipe(res);
-				}
-			}
+		if (req.method === 'GET'){
+			var modelId = parsedUrl.query.properties;
+			var modelFolder = ModelFolder(modelId, type);
+			var file = modelFolder+'/'+filename+'.props';
+			console.log('download properties '+file);
+			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
+			var fileStream = fs.createReadStream(file);
+			fileStream.pipe(res);
+		}
 	} else if (parsedUrl.query.view != undefined) {
 		if (req.method === 'GET'){
-			console.log('the view to query is: ' + modelId);
-			if(modelManager[modelId]) {
-				var file = modelManager[modelId].view;
-				var filename = path.basename(file);
-				console.log('download view of '+filename);
-				res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-				var fileStream = fs.createReadStream(file);
-				fileStream.pipe(res);
-			}
+			var modelId = parsedUrl.query.view;
+			var modelFolder = ModelFolder(modelId, type);
+			var file = modelFolder+'/'+filename+'.json';
+			console.log('download view '+file);
+			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
+			var fileStream = fs.createReadStream(file);
+			fileStream.pipe(res);
 		}
 	} else {
 		res.status(404).send('invalid request.');

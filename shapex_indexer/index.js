@@ -22,16 +22,4 @@ var index = function(file) {
 	form.submit(indexurl, function(err, res){
 		console.log(res);
 	});
-	
-	/*
-	var req = request.post(indexurl, function(err, res, body){
-		if (err) {
-			console.log('Error!');
-			failure.push(file);
-		} 
-			
-		console.log('server respond: ' + body);
-	});
-	*/
-	
 };
