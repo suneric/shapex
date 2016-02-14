@@ -220,3 +220,4 @@ storage/
 node_modules/
 upload/
 images/
+startMongo.bat

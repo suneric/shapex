@@ -15,13 +15,12 @@ nconf.argv().env().file({file: __dirname + '/config.json'});
 
 var currentdir = __dirname;
 var workFolder = path.join(currentdir, nconf.get('work_folder'));
-var indexFolder = path.join(currentdir, nconf.get('index_folder'));
+var storageFolder = path.join(currentdir, nconf.get('storage'));
+var amr = path.join(currentdir, nconf.get('executable'));
 
 var build = nconf.get('build');
 var serverConf = nconf.get(build);
 var shapexServer = serverConf.shapex;
-var amr = nconf.get('executable');
-
 var workerServer = serverConf.workerServer;
 var workerServerHostName = url.parse(workerServer).hostname;
 var workerServerPort = url.parse(workerServer).port;
@@ -31,23 +30,13 @@ console.log('worker http server: ' + workerServerHostName + ' port: ' + workerSe
 var isTaskRunning = false;
 var pollInterval = nconf.get('interval');
 
-/* 
-get file extension
-*/
-function FileFormat(ext) {
-	return ext.substr(1, ext.length);
-}
-
-function ModelFolder(modelId, workType) {
-	if (workType === 'index') {
-		return path.join(indexFolder, modelId);
-	} else {
-		return path.join(workFolder, modelId);
-	}
-}
-
+// run
 setTimeout(function() { pollTaskFromShapeXServer();}, 1); 
 
+/*
+task
+
+*/
 var pollTaskFromShapeXServer = function() {
 	console.log('running pollTaskFromShapeXServer');
 	if(isTaskRunning){
@@ -61,73 +50,28 @@ var pollTaskFromShapeXServer = function() {
 	request(pollurl, function (error, response, body) {
 	 	if (!error && response.statusCode == 200) {
 			isTaskRunning = true;
-			console.log('tasks queried:'+util.inspect(body));
+			//console.log('tasks queried:'+util.inspect(body));
 			var tasks = JSON.parse(body);
 			if (tasks.length > 0) {
-				console.log('launching new signature creation task');
 				if (tasks.length > 1) {
 					console.log('more than one task is not allowed');
 				}
-				console.log('the task object is' + util.inspect(tasks[0]));
 				
-				var modelId = tasks[0]._id;
-				var modelName = tasks[0].sourcename;
-				var modelPath = tasks[0].sourcepath;
-				var workType = tasks[0].worktype;
+				var task = tasks[0];
+				console.log('task is '+ util.inspect(task));
 				
-				// make model id folder and download model
-				var modelFolder = ModelFolder(modelId, workType);
-				if(!fs.existsSync(modelFolder)) {
-					fs.mkdirSync(modelFolder);
+				if (task.type === 'compare')
+				{
+					compareModel(task);
 				}
-			
-				// download model and create signature
-				var downloadDir = path.join(modelFolder, path.basename(modelName));
-				var downloadedModel = fs.createWriteStream(downloadDir);	
-				var pollurl = shapexServer + '/api/1.0/download/' + path.basename(modelPath);
-				console.log('download file from' + pollurl);
-				request.get(pollurl).pipe(downloadedModel);
-				downloadedModel.on('finish', function () {
-					var filePath = downloadDir;
-					console.log('running amr with cwd: ' + filePath);
-					var generator = spawnSync(amr, [filePath], { cwd: modelFolder, encoding: 'utf8' }, function (err, stdout, stderr){
-						console.log('fail to create signature for '+filePath);
-					});
-					
-					// check generate files
-					var filename = path.parse(filePath).name;
-					var descriptorfilename = filename+'.txt';
-					var thumnailfilename = filename+'.png';
-					var propsfilename = filename+'.props';
-					var viewfilename = filename+'.json';
-					var descriptor = path.join(modelFolder, descriptorfilename);
-					var thumbnail = path.join(modelFolder, thumnailfilename);
-					var props = path.join(modelFolder, propsfilename);
-					var view = path.join(modelFolder, viewfilename);
-					
-					// update model manager
-			        var status = 'fail';
-			        var downloadurl = '';
-			        if (fs.existsSync(descriptor) 
-						&& fs.existsSync(thumbnail) 
-					    && fs.existsSync(props) 
-						&& fs.existsSync(view)) 
-					{
-						status = 'succeed';
-						downloadurl = workerServer+ 'signature';
-			        }
-					
-					var postStatus = shapexServer;
-					if (workType === 'index') {
-						postStatus += '/api/1.0/index_status?id='+modelId+'&status='+status+'&downloadurl='+downloadurl+'&name='+filename+'&format='+FileFormat(path.extname(filePath));
-					} else {
-						postStatus += '/api/1.0/worker_status?id='+modelId+'&status='+status+'&downloadurl='+downloadurl+'&name='+filename;
-					}
-			        console.log('post result to shapex server: ' + postStatus);
-			        request.post(postStatus, function (res) {
-			            console.log(util.inspect(res));
-			        });
-				});
+				else if (task.type === 'index')
+				{
+					indexModel(task);
+				} 
+				else if (task.type === 'upload')
+				{
+					createModel(task);
+				}
 			}
 	    
 			isTaskRunning = false;
@@ -140,11 +84,195 @@ var pollTaskFromShapeXServer = function() {
 }
 
 /*
-Server for query thumbnail, descriptor, props and view
-workserver + /signature?thumbnail=&name=&downloadurl=&type=
-workserver + /signature?descriptor=&name=&downloadurl=&type=
-workserver + /signature?properties=&name=&downloadurl=&type=
-workserver + /signature?view=&name=&downloadurl=&type=
+create signature for uploaded file
+work status contains id, status, downloadurl, name and ext
+*/
+var createModel = function(task) {
+	var modelId = task._id;
+	var modelName = task.name;
+	var modelPath = task.path;
+	var workType = task.type;
+	console.log('create signature for model id: '+modelId+' name: '+ modelName);
+	
+	// create a work folder
+	var modelFolder = path.join(workFolder, modelId);
+	if(!fs.existsSync(modelFolder)) {
+		fs.mkdirSync(modelFolder);
+	}
+
+	// download source file from server to worker
+	var pollurl = shapexServer + '/api/1.0/download/' + path.basename(modelPath);
+	console.log('download file from ' + pollurl);
+	var sourceFile = path.join(modelFolder, path.basename(modelName));
+	var downloadedFile = fs.createWriteStream(sourceFile);	
+	request.get(pollurl).pipe(downloadedFile);
+	downloadedFile.on('finish', function () {
+		// create signature
+		var ok = createSignature(sourceFile, modelFolder);
+		
+		var status = 'fail';
+		var downloadurl = '';
+		var extName = path.extname(modelName);
+		var baseName = path.basename(modelName, extName); 
+		
+		if (ok === 0) 
+		{
+			status = 'succeed';
+			downloadurl = workerServer;
+		}
+		
+		// post status to server
+		var workStatus = shapexServer+'/api/1.0/work_status';
+		workStatus += '?status='+status+'&id='+modelId+'&name='+baseName+'&downloadurl='+downloadurl;
+		console.log('post work result to shapex server: ' + workStatus);
+		request.post(workStatus, function (res) {
+			console.log(util.inspect(res));
+		});
+	});
+}
+
+/*
+create signature and upload to storage
+*/
+var indexModel = function(task) {
+	var modelId = task._id;
+	var modelName = task.name;
+	var modelPath = task.path;
+	var workType = task.type;
+	console.log('index signature for model id: '+modelId+' name: '+ modelName);
+	
+	// create index folder
+	var modelFolder = path.join(storageFolder, modelId);
+	if(!fs.existsSync(modelFolder)) {
+		fs.mkdirSync(modelFolder);
+	}
+
+	// download source file from server to worker
+	var pollurl = shapexServer + '/api/1.0/download/' + path.basename(modelPath);
+	console.log('download file from ' + pollurl);
+	var sourceFile = path.join(modelFolder, path.basename(modelName));
+	var downloadedFile = fs.createWriteStream(sourceFile);	
+	request.get(pollurl).pipe(downloadedFile);
+	downloadedFile.on('finish', function () {
+		// create signature
+		var ok = createSignature(sourceFile, modelFolder);
+		
+		var status = 'fail';
+		var downloadurl = '';
+		var extName = path.extname(modelName);
+		var baseName = path.basename(modelName, extName); 
+		
+		if (ok === 0) 
+		{
+			status = 'succeed';
+			downloadurl = workerServer;
+		}
+		
+		// post status to server
+		var indexStatus = shapexServer + '/api/1.0/index_status'
+		indexStatus += '?status='+status+'&id='+modelId+'&name='+baseName+'&ext='+extName+'&downloadurl='+downloadurl;
+		console.log('post index result to shapex server: ' + indexStatus);
+		request.post(indexStatus, function (res) {
+			console.log(util.inspect(res));
+		});
+	});
+}
+
+var compareModel = function(task) {
+	/*
+	var modelId = task._id;
+	var modelName = task.sourcename;
+	var modelPath = task.sourcepath;
+	var workType = task.worktype;
+	var filePath = workingFolder(modelId, 'upload');
+	if (fs.existsSync(filePath))
+	{
+		var modelName = tasks[0].name;
+		filePath += '\\' + modelName + '.txt';
+						
+		var compareItems = tasks[0].compare;
+		var desPaths;
+		for (var i = 0; i < compareItems.length; ++i)
+		{
+			var compareId = compareItems[i]._id;
+			var compareName = compareItems[i].name;
+			var comparePath = ModelFolder(compareId, 'index') + '\\' + compareName + '.txt';
+							
+			if (desPaths === undefined)
+				desPaths = comparePath + '\n';
+			else 
+				desPaths += comparePath +'\n';
+			}
+
+		if (desPaths.length > 0)
+		{
+							// create list file in the model 
+			var listPath = modelFolder + '\\' + 'compare.txt';
+							fs.writeFile(listPath, desPaths, function(){
+								console.log('create compare list file '+ listPath);
+								var resultPath = modelFolder + '\\' + 'result.txt';
+								console.log('run cmd for compare ' + filePath + ' to ' + listPath);
+								var generator = spawnSync(amr, ['cl', filePath, listPath, resultPath], { cwd: modelFolder, encoding: 'utf8' }, function (err, stdout, stderr){
+									console.log('fail to compare for '+filePath);
+								});
+							});							
+		}
+	}	
+	*/
+}
+
+/*
+input source 3D CAD part file, 
+output signature files:
+- descriptor file (filename.txt)
+- view file (filename.json)
+- properties file (filename.props)
+- thumbnail file (filename.png)
+*/
+var createSignature = function (filePath, folder) {
+	console.log('running amr with cwd: ' + amr + ' @ ' + filePath);
+	var generator = spawnSync(amr, [filePath], { cwd: folder, encoding: 'utf8' }, function (err, stdout, stderr){
+		console.log('fail to create signature for ' + filePath);
+	});
+	
+	// validate generated files
+	var fileExt = path.extname(filePath)
+	var fileName = path.basename(filePath, fileExt);
+	console.log('validate signature files for '+ fileName);
+	
+	var descriptorName = fileName+'.txt';
+	var thumnailName = fileName+'.png';
+	var propsName = fileName+'.props';
+	var viewName = fileName+'.json';
+			
+	var descriptor = path.join(folder, descriptorName);
+	var thumbnail = path.join(folder, thumnailName);
+	var props = path.join(folder, propsName);
+	var view = path.join(folder, viewName);
+	
+	if (fs.existsSync(descriptor) 
+		&& fs.existsSync(thumbnail) 
+		&& fs.existsSync(props) 
+		&& fs.existsSync(view)) 
+	{
+		console.log('signature files '+ fileName+ ' are created.');
+		return 0;
+	} 
+	else 
+	{
+		console.log('signature files '+ fileName+ ' are not created.');
+		return 1;
+	}
+}
+
+/*
+http://127.0.0.1:1337/signature?id=xxx&name=xxx&ext=xxx
+ext includes:
+1. source file ext
+2. .png for thumbnail
+3. .txt for descriptor
+4. .props for properties
+5. .json for view
 */
 http.createServer(function (req, res) {
 	console.log('request url is: ' + req.url);
@@ -154,52 +282,25 @@ http.createServer(function (req, res) {
 		return;
 	}
 	
-	var filename = parsedUrl.query.name;
-	var type = parsedUrl.query.type;
-	if (parsedUrl.query.thumbnail != undefined)
-	{
-		if (req.method === 'GET'){
-			var modelId = parsedUrl.query.thumbnail;
-			var modelFolder = ModelFolder(modelId, type);
-			var file = modelFolder+'/'+filename+'.png';
-			console.log('download thumbnail '+file);
-			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-			var fileStream = fs.createReadStream(file);
-			fileStream.pipe(res);
-		}		
-	} else if (parsedUrl.query.descriptor != undefined) {
-		if (req.method === 'GET'){
-			var modelId = parsedUrl.query.descriptor;
-			var modelFolder = ModelFolder(modelId, type);
-			var file = modelFolder+'/'+filename+'.txt';
-			console.log('download descriptor '+file);
-			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-			var fileStream = fs.createReadStream(file);
-			fileStream.pipe(res);
+	if (req.method === 'GET'){
+		var fileName = parsedUrl.query.name;
+		var extName = parsedUrl.query.ext;
+		var modelId = parsedUrl.query.id;
+		var type = parsedUrl.query.type;
+		
+		var modelFolder;
+		if (type === 'index') {
+			modelFolder = path.join(storageFolder, modelId);
+		} else {
+			modelFolder = path.join(workFolder, modelId);
 		}
-	} else if (parsedUrl.query.properties != undefined) {
-		if (req.method === 'GET'){
-			var modelId = parsedUrl.query.properties;
-			var modelFolder = ModelFolder(modelId, type);
-			var file = modelFolder+'/'+filename+'.props';
-			console.log('download properties '+file);
-			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-			var fileStream = fs.createReadStream(file);
-			fileStream.pipe(res);
-		}
-	} else if (parsedUrl.query.view != undefined) {
-		if (req.method === 'GET'){
-			var modelId = parsedUrl.query.view;
-			var modelFolder = ModelFolder(modelId, type);
-			var file = modelFolder+'/'+filename+'.json';
-			console.log('download view '+file);
-			res.setHeader('Content-disposition', 'attachment; filename=' + filename);
-			var fileStream = fs.createReadStream(file);
-			fileStream.pipe(res);
-		}
-	} else {
-		res.status(404).send('invalid request.');
-	}
+		
+		var file = modelFolder+'/'+fileName+extName;
+		console.log('download '+file+ ' from worker.');
+		res.setHeader('Content-disposition', 'attachment; filename=' + fileName);
+		var fileStream = fs.createReadStream(file);
+		fileStream.pipe(res);
+	}		
 		
 }).listen(workerServerPort,workerServerHostName);
 console.log('Worker HTTP Server running at ' + workerServer);
