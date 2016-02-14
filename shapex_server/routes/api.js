@@ -9,6 +9,7 @@ var formidable = require('formidable')
 var taskmanager = require('../models/taskmanager');
 var modelmanager = require('../models/modelmanager');
 var request = require('request');
+var readline = require('readline');
 
 var uuid = require('node-uuid');
 
@@ -102,6 +103,51 @@ router.post('/upload', function(req, res, next) {
 });
 
 /*
+for worker post status
+*/
+router.post('/work_status', function(req, res, next) {
+	console.log('work_status post request:');
+	var queryParams = url.parse(req.url, true).query;
+	console.log(util.inspect(queryParams));
+	
+	var modelId = queryParams.id;
+	var modelName = queryParams.name;
+	var downloadUrl = queryParams.downloadurl;
+	if (queryParams.status != undefined) {
+		console.log('work status of '+modelId+ ' is '+ queryParams.status);
+		if( modelmanager.models[modelId]){
+			modelmanager.models[modelId].status = queryParams.status;
+			modelmanager.models[modelId].name = modelName;
+			modelmanager.models[modelId].downloadurl = downloadUrl;
+			console.log('update '+ modelId + ' status is done.');
+			res.status(200).send(modelmanager.models[modelId]);
+		} else{
+			console.log('update '+ modelId + ' is failed.');
+			res.status(404).send('model is not found');
+		}	
+	}
+});
+
+// for front-end check worker status 
+// succeed, fail, inprogress, unavailable, compare
+router.get('/worker_status/:id', function (req, res, next) {
+    console.log('worker_status get request:');
+	var modelId = req.params.id;
+	console.log('worker status for id: '+modelId);
+	if (modelmanager.models[modelId]) {
+		var workstatus = modelmanager.models[modelId].status;
+		var name = modelmanager.models[modelId].name;
+		var downloadurl = modelmanager.models[modelId].downloadurl;
+		console.log(modelId+ ' is '+workstatus);
+		res.status(200).send({'status' : workstatus, 'downloadurl' : downloadurl, 'name' : name});
+	}
+	else{
+		console.log(modelId+ ' is unavailable.');
+		res.status(200).send({'status' : 'unavailable', 'downloadurl' : '', 'name' : ''});
+	}
+});
+
+/*
 for front-end index a file
 create a worker task for uploaded file with work type as 'index'
 {
@@ -143,38 +189,6 @@ router.post('/index', function(req, res, next) {
     });
 });
 
-/*
-for front-end compare a file
-create a worker task for uploaded file with work type as 'compare'
-{
-	type: 'compare',
-	_id: ,
-	name:,
-	path:,
-}
-*/
-/*
-router.get('/compare/:id/:name', function(req, res, next){
-	var modelId = req.params.id;
-	var modelName = req.params.name;
-	console.log('compare get request.');
-	console.log('compare descriptor for '+modelId + modelName);
-	
-	// find all item in the database
-	// and make a compare task
-	Item.list(function(items) {
-		console.log('search return: ' + items.length);
-		var task = {type: 'compare', _id: modelId, name: modelName, path: items};
-		taskmanager.Push(task);
-		console.log('create a compare task for '+ modelId);
-        res.status(200).json(items);
-    }, function(err) {
-		console.log('err search.');
-        res.status(400).json(err);
-    });
-});
-*/
-
 router.post('/index_status', function(req, res, next) {
 	console.log('index_status post request:');
 	var queryParams = url.parse(req.url, true).query;
@@ -199,49 +213,97 @@ router.post('/index_status', function(req, res, next) {
 });
 
 /*
-for worker post status
+for front-end compare a file
+create a worker task for uploaded file with work type as 'compare'
+{
+	type: 'compare',
+	_id: ,
+	name:,
+	items:,
+}
 */
-router.post('/work_status', function(req, res, next) {
-	console.log('work_status post request:');
+router.post('/compare', function(req, res, next){
+	console.log('compare post request.');
+	var queryParams = url.parse(req.url, true).query;
+	var modelId = queryParams.id;
+	var modelName = queryParams.name;
+	// find all item in the database
+	// and make a compare task
+	Item.list(function(data) {
+		console.log('create a compare task for '+ modelId);
+		var task = {type: 'compare', _id: modelId, name: modelName, items: data};
+		taskmanager.Push(task);
+        res.status(200).json(modelId);
+    }, function(err) {
+		console.log('err search.');
+        res.status(404).json(err);
+    });
+});
+
+/*
+for worker to post compare status
+*/
+router.post('/compare_status', function(req, res, next) {
+	console.log('compare_status post request:');
 	var queryParams = url.parse(req.url, true).query;
 	console.log(util.inspect(queryParams));
 	
 	var modelId = queryParams.id;
-	var modelName = queryParams.name;
-	var downloadUrl = queryParams.downloadurl;
-	if (queryParams.status != undefined) {
-		console.log('work status of '+modelId+ ' is '+ queryParams.status);
-		if( modelmanager.models[modelId]){
-			modelmanager.models[modelId].status = queryParams.status;
-			modelmanager.models[modelId].name = modelName;
-			modelmanager.models[modelId].downloadurl = downloadUrl;
-			console.log('update '+ modelId + ' status is done.');
-			res.status(200).send(modelmanager.models[modelId]);
-		} else{
-			console.log('update '+ modelId + ' is failed.');
-			res.status(404).send('model is not found');
-		}	
+	var compareStatus = queryParams.status;
+	if( modelmanager.models[modelId]){
+		modelmanager.models[modelId].status = compareStatus;
+		console.log('update '+ modelId + ' comapre status is done.');
+		console.log(util.inspect(modelmanager.models[modelId]));
+		res.status(200).send(modelmanager.models[modelId]);
+	} else {
+		console.log('update '+ modelId + ' compare status is failed.');
+		res.status(404).send('model is not found');
+	}	
+});
+
+/*
+for front end to query compare status
+*/
+router.get('/compare_status/:id', function(req, res, next) {
+	console.log('compare_status get request:');
+	var modelId = req.params.id;
+	if(modelmanager.models[modelId]){
+		if (modelmanager.models[modelId].status === 'compare')
+		{
+			var modelName = modelmanager.models[modelId].name;
+			var downloadUrl = modelmanager.models[modelId].downloadurl;
+			var type = 'compare';
+			var compareUrl = downloadUrl+'/signature?id='+modelId+'&name='+name+'&type='+type+'&ext=.compare';
+			console.log('download compare file from '+ compareUrl);
+			
+			var compareFolder = path.join(__dirname, 'compare');
+			var compareName = modelId+'.txt';
+			var compareFile = path.join(compareFolder, compareName);
+			var downloadCompare = fs.createWriteStream(compareFile);
+			request.get(compareUrl).pipe(downloadCompare);
+				downloadCompare.on('finish', function () {
+				if (fs.existsSync(compareFile)) {
+					// read compare result from the file
+					var rl = readline.createInterface({
+						input: fs.createReadStream(compareFile),
+						output: process.stdout,
+						terminal: false
+					});
+
+					rl.on('line', function(line) {
+						console.log('> ' + line);
+					});
+				}
+				else {
+					console.log('fail to compare.');
+					res.status(304).send('fail to compare.');
+				}
+			});
+		}
 	}
 });
 
-// for front-end check worker status 
-// succeed, fail, inprogress, unavailable
-router.get('/worker_status/:id', function (req, res, next) {
-    console.log('worker_status get request:');
-	var modelId = req.params.id;
-	console.log('worker status for id: '+modelId);
-	if (modelmanager.models[modelId]) {
-		var workstatus = modelmanager.models[modelId].status;
-		var name = modelmanager.models[modelId].name;
-		var downloadurl = modelmanager.models[modelId].downloadurl;
-		console.log(modelId+ ' is '+workstatus);
-		res.status(200).send({'status' : workstatus, 'downloadurl' : downloadurl, 'name' : name});
-	}
-	else{
-		console.log(modelId+ ' is unavailable.');
-		res.status(200).send({'status' : 'unavailable', 'downloadurl' : '', 'name' : ''});
-	}
-});
+
 
 /*
 Preview request

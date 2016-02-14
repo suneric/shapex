@@ -207,10 +207,39 @@ $(document).ready(function(){
 				$.get(previewurl, function(data){
 					if (data.url) {
 						appendPreview(data.url);
+						// shape search
+						comparefile(modelId, res.name);
 					}
 				});
 			} else {
 				setTimeout(function(){preview(modelId);}, 1000);
+			}
+		});
+	}
+	
+	function comparefile(id, name){
+		document.body.style.cursor = "progress";
+		$.ajax({
+			url: "/api/1.0/compare?id="+id+"&name="+name,
+			type: "POST",
+			data: '',
+			processData: false,
+			contentType: false,
+			success: function(res){
+				setTimeout(function(){comparepreview(res);}, 1000);
+			}
+		});
+	}
+	
+	function comparepreview(modelId) {
+		document.body.style.cursor = "progress";
+		$.get('api/1.0/compare_status/'+modelId, function(res){
+			if (res.status === 'compare'){	
+				for (var i = 0; i < res.data.length; ++i) {
+					appendItem(data[i], i);
+				}
+			} else {
+				setTimeout(function(){comparepreview(modelId);}, 1000);
 			}
 		});
 	}

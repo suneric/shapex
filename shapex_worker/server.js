@@ -178,47 +178,67 @@ var indexModel = function(task) {
 	});
 }
 
+/*
+Compare model with 
+.compare file for shape search result
+*/
 var compareModel = function(task) {
-	/*
 	var modelId = task._id;
-	var modelName = task.sourcename;
-	var modelPath = task.sourcepath;
-	var workType = task.worktype;
-	var filePath = workingFolder(modelId, 'upload');
-	if (fs.existsSync(filePath))
-	{
-		var modelName = tasks[0].name;
-		filePath += '\\' + modelName + '.txt';
-						
-		var compareItems = tasks[0].compare;
-		var desPaths;
-		for (var i = 0; i < compareItems.length; ++i)
-		{
-			var compareId = compareItems[i]._id;
-			var compareName = compareItems[i].name;
-			var comparePath = ModelFolder(compareId, 'index') + '\\' + compareName + '.txt';
-							
-			if (desPaths === undefined)
-				desPaths = comparePath + '\n';
-			else 
-				desPaths += comparePath +'\n';
-			}
+	var modelName = task.name;
+	var items = task.items;
+	var workType = task.type;
+	
+	var modelFolder = path.join(workFolder, modelId);
+	var descriptorName = modelName+'.txt';
+	var descriptorFile = path.join(modelFolder, descriptorName);
+	if (!fs.existsSync(descriptorFile)) {
+		return;
+	}
 
-		if (desPaths.length > 0)
+	// make a compare list file 
+	var desPaths;
+	for (var i = 0; i < items.length; ++i) {
+		var compareId = items[i]._id;
+		var compareName = items[i].name;
+		var compareFolder = path.join(storageFolder, compareId);
+		var compareDesName = compareName+'.txt';
+		var compareDesFile = path.join(compareFolder, compareDesName);
+		
+		if (fs.existsSync(compareDesFile))
 		{
-							// create list file in the model 
-			var listPath = modelFolder + '\\' + 'compare.txt';
-							fs.writeFile(listPath, desPaths, function(){
-								console.log('create compare list file '+ listPath);
-								var resultPath = modelFolder + '\\' + 'result.txt';
-								console.log('run cmd for compare ' + filePath + ' to ' + listPath);
-								var generator = spawnSync(amr, ['cl', filePath, listPath, resultPath], { cwd: modelFolder, encoding: 'utf8' }, function (err, stdout, stderr){
-									console.log('fail to compare for '+filePath);
-								});
-							});							
-		}
+			if (desPaths === undefined)
+				desPaths = compareDesFile + '\n';
+			else 
+				desPaths += compareDesFile +'\n';
+		}					
 	}	
-	*/
+	
+	if (desPaths != undefined) {
+		// create list file in the model 
+		var compareListFile = path.join(modelFolder,'compare.txt');
+		fs.writeFile(compareListFile, desPaths, function(){
+			console.log('create compare list file '+ compareListFile);
+			var resultFileName = modelName+'.compare';
+			var resultFile = path.join(modelFolder, resultFileName);
+			console.log('run cmd for compare ' + descriptorFile + ' to ' + compareListFile);
+			var generator = spawnSync(amr, ['cl', descriptorFile, compareListFile, resultFile], { cwd: modelFolder, encoding: 'utf8' }, function (err, stdout, stderr){
+				console.log('fail to compare for '+descriptorFile);
+			});
+			
+			if (fs.existsSync(resultFile)) {
+				console.log('shape search result is ready.');
+				// post status to server
+				var compareStatus = shapexServer + '/api/1.0/compare_status'
+				compareStatus += '?status=compare'+'&id='+modelId;
+				console.log('post compare result to shapex server: ' + compareStatus);
+				request.post(compareStatus, function (res) {
+					console.log(util.inspect(res));
+				});
+			} else {
+				console.log('failed to compare the shape descriptor.');
+			}
+		});							
+	}
 }
 
 /*
@@ -273,6 +293,7 @@ ext includes:
 3. .txt for descriptor
 4. .props for properties
 5. .json for view
+6. .compare for descriptor compare file
 */
 http.createServer(function (req, res) {
 	console.log('request url is: ' + req.url);
