@@ -158,6 +158,7 @@ function results()
 			return;
 		}
 		
+		$("#results").empty();
 		for (var i = 0; i < data.length; ++i) {
 			var res = data[i];
 			appendItem(res, i);
@@ -235,6 +236,7 @@ $(document).ready(function(){
 		// document.body.style.cursor = "progress";
 		$.get('api/1.0/compare_status/'+modelId, function(res){
 			if (res.status === 'compare'){	
+				$("#results").empty();
 				for (var i = 0; i < res.data.length; ++i) {
 					appendItem(res.data[i], i);
 				}

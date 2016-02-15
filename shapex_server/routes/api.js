@@ -297,11 +297,35 @@ router.get('/compare_status/:id', function(req, res, next) {
 				});
 
 				rl.on('line', function(line) {
-					console.log('> ' + line);
+					console.log('read line '+line);
+					// parse line : {value: xxx, file: xxx.txt}
+					var valueIndex = line.indexOf('value:')+6;
+					var fileIndex = line.indexOf('file:')+5;
+					var similarity = line.substr(valueIndex, line.indexOf(',')-valueIndex);
+					var fileName = line.substr(fileIndex, line.length-fileIndex-1);
+					console.log(fileName + ' value is ' + similarity);
+					
+					// parse id , name 
+					var fileDir = path.dirname(fileName);
+					var baseName = path.basename(fileName, '.txt');
+					var dirNames = fileDir.split(path.sep);
+					var modelId = dirNames[dirNames.length-1];
+					console.log('Id: '+modelId +' Name: '+ baseName +' similarity is '+ similarity);
+					
+					var itemData = {
+						_id : modelId,
+						name : baseName,
+						format : '',
+						url : downloadUrl
+					}					
+					
+					compareList.push(itemData);
+				}).on('close', function() {
+					// return data
+					compareList.reverse();
+					console.log('finsh reading compare result file.');
+					res.status(200).send({'status' : workStatus, data : compareList});
 				});
-				
-				console.log('finsh reading compare result file.');
-				res.status(200).send({'status' : workStatus, data : compareList});
 			} else {
 				console.log('fail to download compare result file.');
 				res.status(200).send({'status' : 'unavailable', data : []});
