@@ -85,6 +85,9 @@ router.post('/upload', function(req, res, next) {
 			}
 		
 			console.log("upload success: "+uploadFile.path); 
+			//var fileName = uploadFile.name;
+			//fileName.replace(/[`~!@#$%^&*()_|+\-=?;:'",.<>\{\}\[\]\\\/]/gi, '');
+			//console.log(uploadFile.name+ ' is replaced to ' +fileName);
 			
 			// create a task with a uniuqe id.
 			var id = uuid.v4();
@@ -267,39 +270,46 @@ for front end to query compare status
 router.get('/compare_status/:id', function(req, res, next) {
 	console.log('compare_status get request:');
 	var modelId = req.params.id;
-	if(modelmanager.models[modelId]){
-		if (modelmanager.models[modelId].status === 'compare')
-		{
-			var modelName = modelmanager.models[modelId].name;
-			var downloadUrl = modelmanager.models[modelId].downloadurl;
-			var type = 'compare';
-			var compareUrl = downloadUrl+'/signature?id='+modelId+'&name='+name+'&type='+type+'&ext=.compare';
-			console.log('download compare file from '+ compareUrl);
+	var model = modelmanager.models[modelId];
+	if(model && model.status === 'compare') {
+		var modelName = model.name;
+		var workStatus = model.status;
+		var downloadUrl = model.downloadurl;
+		var type = 'compare';
+		var compareUrl = downloadUrl+'/signature?id='+modelId+'&name='+modelName+'&type='+type+'&ext=.compare';
+		console.log('download compare file from '+ compareUrl);
+		
+		var compareFolder = path.join(__dirname, '../compare');
+		var compareName = modelId+'.txt';
+		var compareFile = path.join(compareFolder, compareName);
+		console.log('download compare file to '+compareFile);
 			
-			var compareFolder = path.join(__dirname, 'compare');
-			var compareName = modelId+'.txt';
-			var compareFile = path.join(compareFolder, compareName);
-			var downloadCompare = fs.createWriteStream(compareFile);
-			request.get(compareUrl).pipe(downloadCompare);
-				downloadCompare.on('finish', function () {
-				if (fs.existsSync(compareFile)) {
-					// read compare result from the file
-					var rl = readline.createInterface({
-						input: fs.createReadStream(compareFile),
-						output: process.stdout,
-						terminal: false
-					});
+		var downloadCompare = fs.createWriteStream(compareFile);
+		request.get(compareUrl).pipe(downloadCompare);
+		downloadCompare.on('finish', function () {
+			if (fs.existsSync(compareFile)) {
+				var compareList = [];
+				// read compare result from the file
+				var rl = readline.createInterface({
+					input: fs.createReadStream(compareFile),
+					output: process.stdout,
+					terminal: false
+				});
 
-					rl.on('line', function(line) {
-						console.log('> ' + line);
-					});
-				}
-				else {
-					console.log('fail to compare.');
-					res.status(304).send('fail to compare.');
-				}
-			});
-		}
+				rl.on('line', function(line) {
+					console.log('> ' + line);
+				});
+				
+				console.log('finsh reading compare result file.');
+				res.status(200).send({'status' : workStatus, data : compareList});
+			} else {
+				console.log('fail to download compare result file.');
+				res.status(200).send({'status' : 'unavailable', data : []});
+			}
+		});
+	} else {
+		console.log('compare file is not available.');
+		res.status(200).send({'status' : 'unavailable', data : []});
 	}
 });
 

@@ -182,7 +182,7 @@ $(document).ready(function(){
 	});
 	
 	function uploadfile(f) {
-		document.body.style.cursor = "progress";
+		// document.body.style.cursor = "progress";
 		var fd = new FormData();
 		fd.append("file", f);
 		$.ajax({
@@ -198,7 +198,7 @@ $(document).ready(function(){
 	}
 	
 	function preview(modelId) {
-		document.body.style.cursor = "progress";
+		// document.body.style.cursor = "progress";
 		$.get('api/1.0/worker_status/'+modelId, function(res){
 			if (res.status === 'fail') {
 				alert('failed to create signature for the uploaded file.');
@@ -218,7 +218,7 @@ $(document).ready(function(){
 	}
 	
 	function comparefile(id, name){
-		document.body.style.cursor = "progress";
+		// document.body.style.cursor = "progress";
 		$.ajax({
 			url: "/api/1.0/compare?id="+id+"&name="+name,
 			type: "POST",
@@ -232,11 +232,11 @@ $(document).ready(function(){
 	}
 	
 	function comparepreview(modelId) {
-		document.body.style.cursor = "progress";
+		// document.body.style.cursor = "progress";
 		$.get('api/1.0/compare_status/'+modelId, function(res){
 			if (res.status === 'compare'){	
 				for (var i = 0; i < res.data.length; ++i) {
-					appendItem(data[i], i);
+					appendItem(res.data[i], i);
 				}
 			} else {
 				setTimeout(function(){comparepreview(modelId);}, 1000);
