@@ -315,15 +315,16 @@ router.get('/compare_status/:id', function(req, res, next) {
 					var itemData = {
 						_id : modelId,
 						name : baseName,
-						format : '',
-						url : downloadUrl
+						format : undefined,
+						url : downloadUrl,
+						similarity : similarity
 					}					
 					
 					compareList.push(itemData);
 				}).on('close', function() {
 					// return data
 					compareList.reverse();
-					console.log('finsh reading compare result file.');
+					console.log('finsh reading compare result file, ' + compareList.length + ' records found.');
 					res.status(200).send({'status' : workStatus, data : compareList});
 				});
 			} else {

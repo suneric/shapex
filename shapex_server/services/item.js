@@ -11,6 +11,17 @@ exports.list = function(callback, errback) {
     });
 };
 
+exports.find = function(id, callback, errback) {
+    Item.find({_id: id}, function(err, items){
+        if (err) {
+            errback(err);
+            return;
+        }
+        console.log('find: '+id);
+        callback(items);
+    });
+};
+
 exports.search = function(key, callback, errback) {
 	console.log('list all items contain '+ key);
     Item.find({name:{'$regex': key, '$options': 'i'}}, function(err, items) {

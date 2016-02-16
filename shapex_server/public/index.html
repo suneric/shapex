@@ -11,7 +11,7 @@
 </head>
 <body>
   <!--nav-->
-  <nav class="grey lighten-1" role="navigation">
+  <nav class="blue-grey lighten-3" role="navigation">
     <div class="nav-wrapper container"><a id="logo-container" href="#" class="brand-logo">ShapeX</a>
       <ul class="right hide-on-med-and-down">
         <li><a href="#"></a></li>
@@ -24,43 +24,95 @@
     </div>
   </nav>
 
-  <!--search section-->
-  <div class="container">
-	<div class="row">
-      <div class="col s12 l4"> 
-	  	<div class="section"> <!--text search-->
+  <!--layout-->
+  <div class="row"> <!--search section-->
+  	<!--search panel-->
+  	<div class="col s12 l3">
+  	  <div class="section"> <!--text search-->
+  	  	<label for="text-search">Search Model Name</label>
 		<form action="#" method="get" onsubmit="return results()">
-		  <label for="text-search">Search model name</label>
 		  <input id="text-search" type="text"></input>
-		  <button class="btn waves-effect grey lighten-1" type="submit">Shapple</button>
+		  <button class="btn waves-effect blue-grey lighten-3" type="submit">Find</button>
 		<form>
-		</div>
-		<div class="section"> <!--shape search-->
-			<label for="btn-upload">Search model shape</label>
-			<div class="file-field input-field">
-			  <div class="btn waves-effect grey lighten-1">
-				<span>File</span>
-				<input id ="btn-upload" type="file">
-			  </div>
-			  <div class="file-path-wrapper">
-				<input id="upload-name" class="file-path validate" type="text">
-			  </div>
-			</div>
-		  <div class="card"> <!--upload file thumbnail-->
-            <div class="card-image" id="upload">
-            </div>
+	  </div>
+
+	  <div class="section"> <!--shape search-->
+		<label for="btn-upload">Search Model Shape</label>
+		<div class="file-field input-field">
+	      <div class="btn waves-effect blue-grey lighten-3">
+		    <span>File</span>
+		    <input id ="btn-upload" type="file">
+	      </div>
+		  <div class="file-path-wrapper">
+		    <input id="upload-name" class="file-path validate" type="text">
 		  </div>
+	    </div>
+      	<div class="card"> <!--thumbnail dispaly for uploaded file-->
+          <div class="card-image" id="upload">
+          </div>
 		</div>
-      </div>
-      <div class="col s12 l8"> 
-	  	<div class="container" id="results"> <!--search result-->
-		</div>
-      </div>
-	</div>
+	  </div>
+
+	  <div class="section"> <!--format filter-->
+	  	<label>Select File Format</lable>
+	  	<form action="#">
+    	  <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">CATIA V5 File</label>
+          </p>
+
+          <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">Solidworks File</label>
+          </p>
+
+          <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">UG/NX File</label>
+          </p>
+
+          <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">PRO/E File</label>
+          </p>
+
+          <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">STEP file</label>
+          </p>
+
+          <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">IGES file</label>
+          </p>
+
+          <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">SAT File</label>
+          </p>
+
+          <p>
+      		<input type="checkbox" id="test5" />
+            <label for="test5">Alias File</label>
+          </p>
+
+        </form>
+	  </div>
+  	</div>
+
+  	<!--search result-->
+  	<div class="col s12 l9"> 
+	  <div class="section"> <!--search result-->
+	  	<label id="label-result">Search Results</lable>
+	  	<ul class="collection" id= "results">
+        </ul>
+	  </div>
+    </div>
+
   </div>
 
   <!--footer-->
-  <footer class="page-footer grey lighten-1">
+  <footer class="page-footer blue-grey lighten-3">
     <div class="container">
       <div class="row">
         <div class="col l6 s12">
@@ -68,22 +120,22 @@
           <p class="grey-text text-lighten-4">ShapeX is a platform of 3D model search and reuse.</p>
         </div>
         <div class="col l3 s12">
-          <h5 class="white-text">Settings</h5>
+          <h5 class="white-text">Links</h5>
           <ul>
-            <li><a class="white-text" href="#!">Wiki</a></li>
+            <li><a class="white-text" href="https://wiki.autodesk.com/pages/viewpage.action?spaceKey=mfgtran&title=ShapeX%3A+Geometry+based+Search+Engine">Wiki</a></li>
           </ul>
         </div>
         <div class="col l3 s12">
           <h5 class="white-text">Connect</h5>
           <ul>
-            <li><a class="white-text" href="yufeng.sun@autodesk.com">Eric Sun</a></li>
+            <li><a class="white-text" href="mailto:yufeng.sun@autodesk.com">Eric Sun</a></li>
           </ul>
         </div>
       </div>
     </div>
     <div class="footer-copyright">
       <div class="container">
-      CopyRight @ <a class="orange-text text-lighten-3" href="yufeng.sun@autodesk.com">Eric Sun</a>
+      CopyRight @ <a class="orange-text text-lighten-3" href="mailto:yufeng.sun@autodesk.com">Eric Sun</a>
       </div>
     </div>
   </footer>
@@ -97,7 +149,7 @@
   
 <script type="text/javascript">
 
-function appendItem(item, index) {
+function appendItem(item, index, compare) {
 	var modelId = item._id;
 	var name = item.name;
 	var format = item.format;
@@ -105,14 +157,37 @@ function appendItem(item, index) {
 	
 	var previewurl = '/api/1.0/preview?id='+modelId+'&name='+name+'&downloadurl='+url+'&type=index';
 	$.get(previewurl, function(res){
-		var itemDiv = document.createElement("div");
-		itemDiv.setAttribute('class','item');
+		var itemLi = document.createElement("li");
+		itemLi.setAttribute('class','collection-item avatar');
+
+      	// append img
 		var img = document.createElement("img");
-		img.height = 200;
-		img.width = 200;
 		img.src = res.url;
-		itemDiv.appendChild(img);
-		$("#results").append(itemDiv);
+		img.setAttribute('class', 'circle');
+		itemLi.appendChild(img);
+
+		// append title
+		var value= undefined;
+		if (compare === true)
+			value = 'similarity : '+item.similarity;
+		else
+			value = 'format : '+format;
+		/*
+		var span = document.createElement('span');
+		span.setAttribute('class', 'title');
+		span.innerText = value;
+		itemLi.appendChild(span);
+		*/
+
+		// append format
+		var p1 = document.createElement('p');
+		p1.innerText = value;
+		var p2 = document.createElement('p');
+		p2.innerText ='name: ' + name;
+		itemLi.appendChild(p1);
+		itemLi.appendChild(p2);
+
+		$("#results").append(itemLi);
 	});
 };
 
@@ -129,16 +204,20 @@ function results()
 {
 	var url = "/api/1.0/search/"+$('#text-search').val();
 	$.get(url, function(data){
-		if (data.length === 0) {
+		var number = data.length;
+		if (number === 0) {
 			alert('no record found');
 			return;
 		}
 		
+		
 		$("#results").empty();
-		for (var i = 0; i < data.length; ++i) {
+		for (var i = 0; i < number; ++i) {
 			var res = data[i];
-			appendItem(res, i);
+			appendItem(res, i, false);
 		}
+
+		//$("#label-result").text("Search Results: "+ number);
 	});
 };
 
@@ -196,10 +275,13 @@ function comparepreview(modelId) {
 	// document.body.style.cursor = "progress";
 	$.get('api/1.0/compare_status/'+modelId, function(res){
 		if (res.status === 'compare'){	
+			var number = res.data.length;
 			$("#results").empty();
-			for (var i = 0; i < res.data.length; ++i) {
-				appendItem(res.data[i], i);
+			for (var i = 0; i < number; ++i) {
+				appendItem(res.data[i], i, true);
 			}
+
+			//$("#label-result").text("Search Results: "+ number);
 		} else {
 			setTimeout(function(){comparepreview(modelId);}, 1000);
 		}
