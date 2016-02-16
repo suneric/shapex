@@ -30,10 +30,14 @@
   	<div class="col s12 l3">
   	  <div class="section"> <!--text search-->
   	  	<label for="text-search">Search Model Name</label>
-		<form action="#" method="get" onsubmit="return results()">
-		  <input id="text-search" type="text"></input>
-		  <button class="btn waves-effect blue-grey lighten-3" type="submit">Find</button>
-		<form>
+		  <div class="nav-wrapper">
+      		<form action="#" method="get" onsubmit="return results()">
+        	  <div class="input-field">
+                <input id="text-search" type="search" required>
+                <i class="material-icons" onclick="results()">search</i>
+              </div>
+            </form>
+         </div>
 	  </div>
 
 	  <div class="section"> <!--shape search-->
