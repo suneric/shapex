@@ -1,16 +1,229 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <!-- The above 3 meta tags *must* come first in the head; any other head content must come *after* these tags -->
-    <meta name="description" content="">
-    <meta name="author" content="">
-    <link rel="icon" href="../../favicon.ico">
-    <title>ShapeX</title>
-  </head>
-  <body>
-	<p>This page needs to be implemented. please use /results.html</p>
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.0"/>
+  <title>ShapeX</title>
+
+  <!-- CSS  -->
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <link href="stylesheets/materialize.min.css" type="text/css" rel="stylesheet" media="screen,projection"/>
+</head>
+<body>
+  <!--nav-->
+  <nav class="grey lighten-1" role="navigation">
+    <div class="nav-wrapper container"><a id="logo-container" href="#" class="brand-logo">ShapeX</a>
+      <ul class="right hide-on-med-and-down">
+        <li><a href="#"></a></li>
+      </ul>
+
+      <ul id="nav-mobile" class="side-nav">
+        <li><a href="#"></a></li>
+      </ul>
+      <a href="#" data-activates="nav-mobile" class="button-collapse"><i class="material-icons">menu</i></a>
+    </div>
+  </nav>
+
+  <!--search section-->
+  <div class="container">
+	<div class="row">
+      <div class="col s12 l4"> 
+	  	<div class="section"> <!--text search-->
+		<form action="#" method="get" onsubmit="return results()">
+		  <label for="text-search">Search model name</label>
+		  <input id="text-search" type="text"></input>
+		  <button class="btn waves-effect grey lighten-1" type="submit">Shapple</button>
+		<form>
+		</div>
+		<div class="section"> <!--shape search-->
+			<label for="btn-upload">Search model shape</label>
+			<div class="file-field input-field">
+			  <div class="btn waves-effect grey lighten-1">
+				<span>File</span>
+				<input id ="btn-upload" type="file">
+			  </div>
+			  <div class="file-path-wrapper">
+				<input id="upload-name" class="file-path validate" type="text">
+			  </div>
+			</div>
+		  <div class="card"> <!--upload file thumbnail-->
+            <div class="card-image" id="upload">
+            </div>
+		  </div>
+		</div>
+      </div>
+      <div class="col s12 l8"> 
+	  	<div class="container" id="results"> <!--search result-->
+		</div>
+      </div>
+	</div>
+  </div>
+
+  <!--footer-->
+  <footer class="page-footer grey lighten-1">
+    <div class="container">
+      <div class="row">
+        <div class="col l6 s12">
+          <h5 class="white-text">About ShapeX</h5>
+          <p class="grey-text text-lighten-4">ShapeX is a platform of 3D model search and reuse.</p>
+        </div>
+        <div class="col l3 s12">
+          <h5 class="white-text">Settings</h5>
+          <ul>
+            <li><a class="white-text" href="#!">Wiki</a></li>
+          </ul>
+        </div>
+        <div class="col l3 s12">
+          <h5 class="white-text">Connect</h5>
+          <ul>
+            <li><a class="white-text" href="yufeng.sun@autodesk.com">Eric Sun</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <div class="footer-copyright">
+      <div class="container">
+      CopyRight @ <a class="orange-text text-lighten-3" href="yufeng.sun@autodesk.com">Eric Sun</a>
+      </div>
+    </div>
+  </footer>
+
+
+  <!--  Scripts-->
+  <script src="javascripts/jquery-2.1.1.min.js"></script>
+  <script src="javascripts/materialize.js"></script>
+
   </body>
+  
+<script type="text/javascript">
+
+function appendItem(item, index) {
+	var modelId = item._id;
+	var name = item.name;
+	var format = item.format;
+	var url = item.url;
+	
+	var previewurl = '/api/1.0/preview?id='+modelId+'&name='+name+'&downloadurl='+url+'&type=index';
+	$.get(previewurl, function(res){
+		var itemDiv = document.createElement("div");
+		itemDiv.setAttribute('class','item');
+		var img = document.createElement("img");
+		img.height = 200;
+		img.width = 200;
+		img.src = res.url;
+		itemDiv.appendChild(img);
+		$("#results").append(itemDiv);
+	});
+};
+
+function appendPreview(data) {
+	var img = $('#upload').find('img')[0]; 
+	if (img === undefined){
+		img = document.createElement("img");
+		$('#upload').append(img);
+	}
+	img.src = data.url;
+};
+
+function results()
+{
+	var url = "/api/1.0/search/"+$('#text-search').val();
+	$.get(url, function(data){
+		if (data.length === 0) {
+			alert('no record found');
+			return;
+		}
+		
+		$("#results").empty();
+		for (var i = 0; i < data.length; ++i) {
+			var res = data[i];
+			appendItem(res, i);
+		}
+	});
+};
+
+function uploadfile(f) {
+	// document.body.style.cursor = "progress";
+	var fd = new FormData();
+	fd.append("file", f);
+	$.ajax({
+		url: "/api/1.0/upload",
+		type: "POST",
+		data: fd,
+		processData: false,
+		contentType: false,
+		success: function(res){
+			setTimeout(function(){preview(res);}, 1000);
+		}
+	});
+};
+	
+function preview(modelId) {
+	// document.body.style.cursor = "progress";
+	$.get('api/1.0/worker_status/'+modelId, function(res){
+		if (res.status === 'fail') {
+			alert('failed to create signature for the uploaded file.');
+		} else if (res.status === 'succeed'){	
+			var previewurl = '/api/1.0/preview?id='+modelId+'&name='+res.name+'&downloadurl='+res.downloadurl+'&type=work';
+			$.get(previewurl, function(data){
+				if (data.url) {
+					appendPreview(data);
+					// shape search
+					comparefile(modelId, res.name);
+				}
+			});
+		} else {
+			setTimeout(function(){preview(modelId);}, 1000);
+		}
+	});
+};
+	
+function comparefile(id, name){
+	// document.body.style.cursor = "progress";
+	$.ajax({
+		url: "/api/1.0/compare?id="+id+"&name="+name,
+		type: "POST",
+		data: '',
+		processData: false,
+		contentType: false,
+		success: function(res){
+			setTimeout(function(){comparepreview(res);}, 1000);
+		}
+	});
+};
+	
+function comparepreview(modelId) {
+	// document.body.style.cursor = "progress";
+	$.get('api/1.0/compare_status/'+modelId, function(res){
+		if (res.status === 'compare'){	
+			$("#results").empty();
+			for (var i = 0; i < res.data.length; ++i) {
+				appendItem(res.data[i], i);
+			}
+		} else {
+			setTimeout(function(){comparepreview(modelId);}, 1000);
+		}
+	});
+};
+
+$(document).ready(function(){
+	var url = window.location.toString();
+	var index = url.lastIndexOf("search");
+	if (index > 0) {	
+		var key = url.substr(url.lastIndexOf("search")+7,url.length-url.lastIndexOf("search="));
+		$("#text-search").val(key);
+		// results();
+	}
+	
+	$('#btn-upload').change(function() {
+		// only support single file
+		var file = $(this)[0].files[0];
+		$("#upload-name").val(file.name);
+		uploadfile(file);
+		return false;
+	});
+});
+ 
+</script>
+
 </html>
